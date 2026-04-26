@@ -15,6 +15,18 @@ const DEFAULT_API_KEY = 'sk-RP4MCNqAf9zvWJBoPyktFmmVVZhcPRjKbeAFffOVm1ROgDjG';
 const MAX_IMAGES = 3;
 const { width } = Dimensions.get('window');
 
+const RESULT_FIELDS = [
+  ['Product Name', 'productName'],
+  ['Brand', 'brand'],
+  ['Category', 'category'],
+  ['Barcode', 'barcode'],
+  ['Weight / Volume', 'weightOrVolume'],
+  ['Country of Origin', 'countryOfOrigin'],
+  ['Expiry Date', 'expiryDate'],
+  ['Description', 'description'],
+  ['Other Details', 'otherDetails'],
+];
+
 export default function ScanScreen() {
   const { storeId, storeName, categoryId, categoryName } = useLocalSearchParams();
   const router = useRouter();
@@ -27,7 +39,6 @@ export default function ScanScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [scanResult, setScanResult] = useState(null);
 
-  // Pricing modal state
   const [priceModalVisible, setPriceModalVisible] = useState(false);
   const [price, setPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
@@ -65,7 +76,6 @@ export default function ScanScreen() {
     try {
       const result = await analyzeProductImages(images, DEFAULT_API_KEY);
       setScanResult(result);
-      // Pre-fill price from scan if available
       if (result.price) {
         const numericPrice = result.price.replace(/[^0-9.]/g, '');
         if (numericPrice) setPrice(numericPrice);
@@ -103,10 +113,14 @@ export default function ScanScreen() {
 
   if (!permission?.granted) {
     return (
-      <SafeAreaView style={styles.center}>
-        <Text style={styles.permissionText}>Camera access is required to scan products.</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
+      <SafeAreaView style={styles.permissionScreen}>
+        <View style={styles.permissionIcon}>
+          <Text style={styles.permissionIconText}>📷</Text>
+        </View>
+        <Text style={styles.permissionTitle}>Camera Access Required</Text>
+        <Text style={styles.permissionDesc}>Allow camera access to scan product images for AI analysis.</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
+          <Text style={styles.primaryButtonText}>Grant Permission</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -114,16 +128,24 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.breadcrumb}>{storeName} › {categoryName}</Text>
-        <Text style={styles.title}>Scan Product</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={styles.headerLabel}>{storeName} › {categoryName}</Text>
+        <Text style={styles.headerTitle}>Scan Product</Text>
 
         {/* Camera */}
         {showCamera ? (
-          <View style={styles.cameraContainer}>
+          <View style={styles.cameraCard}>
             <CameraView style={styles.camera} ref={cameraRef}>
-              <View style={styles.cameraOverlay}>
-                <Text style={styles.cameraText}>{images.length}/{MAX_IMAGES} captured</Text>
+              <View style={styles.cameraTopBar}>
+                <View style={styles.cameraCounter}>
+                  <Text style={styles.cameraCounterText}>{images.length} / {MAX_IMAGES}</Text>
+                </View>
+              </View>
+              <View style={styles.cameraFrame}>
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
               </View>
             </CameraView>
             <View style={styles.cameraControls}>
@@ -134,78 +156,93 @@ export default function ScanScreen() {
               >
                 <View style={styles.captureInner} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.closeCameraBtn} onPress={() => setShowCamera(false)}>
-                <Text style={styles.buttonText}>Done</Text>
+              <TouchableOpacity style={styles.doneCameraBtn} onPress={() => setShowCamera(false)}>
+                <Text style={styles.doneCameraText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <TouchableOpacity style={styles.button} onPress={() => setShowCamera(true)}>
-            <Text style={styles.buttonText}>Open Camera</Text>
+          <TouchableOpacity style={styles.openCameraBtn} onPress={() => setShowCamera(true)}>
+            <Text style={styles.openCameraIcon}>📷</Text>
+            <Text style={styles.openCameraText}>Open Camera</Text>
+            <Text style={styles.openCameraHint}>Capture up to {MAX_IMAGES} images</Text>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={pickFromGallery}>
-          <Text style={[styles.buttonText, { color: '#2c3e50' }]}>Pick from Gallery</Text>
+        {/* Gallery Button */}
+        <TouchableOpacity
+          style={[styles.secondaryButton, images.length >= MAX_IMAGES && { opacity: 0.4 }]}
+          onPress={pickFromGallery}
+          disabled={images.length >= MAX_IMAGES}
+        >
+          <Text style={styles.secondaryButtonText}>🖼  Pick from Gallery</Text>
         </TouchableOpacity>
 
         {/* Thumbnails */}
         {images.length > 0 && (
-          <View style={styles.thumbnailRow}>
-            {images.map((img, idx) => (
-              <View key={idx} style={styles.thumbWrapper}>
-                <Image source={{ uri: `data:image/jpeg;base64,${img}` }} style={styles.thumb} />
-                <TouchableOpacity
-                  style={styles.removeThumb}
-                  onPress={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                >
-                  <Text style={styles.removeThumbText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+          <View style={styles.thumbnailSection}>
+            <Text style={styles.thumbnailLabel}>Captured Images</Text>
+            <View style={styles.thumbnailRow}>
+              {images.map((img, idx) => (
+                <View key={idx} style={styles.thumbWrapper}>
+                  <Image source={{ uri: `data:image/jpeg;base64,${img}` }} style={styles.thumb} />
+                  <TouchableOpacity
+                    style={styles.removeThumb}
+                    onPress={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                  >
+                    <Text style={styles.removeThumbText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {Array.from({ length: MAX_IMAGES - images.length }).map((_, i) => (
+                <View key={`empty-${i}`} style={styles.thumbEmpty} />
+              ))}
+            </View>
           </View>
         )}
 
-        {/* Analyze */}
+        {/* Analyze Button */}
         <TouchableOpacity
-          style={[styles.button, styles.analyzeButton, (analyzing || images.length === 0) && { opacity: 0.5 }]}
+          style={[styles.analyzeButton, (analyzing || images.length === 0) && { opacity: 0.5 }]}
           onPress={handleAnalyze}
           disabled={analyzing || images.length === 0}
         >
-          {analyzing ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Analyze with AI</Text>}
+          {analyzing ? (
+            <View style={styles.analyzingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={[styles.analyzeButtonText, { marginLeft: 10 }]}>Analyzing with AI…</Text>
+            </View>
+          ) : (
+            <Text style={styles.analyzeButtonText}>✦  Analyze with AI</Text>
+          )}
         </TouchableOpacity>
 
         {/* Scan Result */}
         {scanResult && (
           <View style={styles.resultCard}>
-            <Text style={styles.resultTitle}>Scan Result</Text>
-            {[
-              ['Product Name', scanResult.productName],
-              ['Brand', scanResult.brand],
-              ['Category', scanResult.category],
-              ['Barcode', scanResult.barcode],
-              ['Weight / Volume', scanResult.weightOrVolume],
-              ['Description', scanResult.description],
-              ['Country of Origin', scanResult.countryOfOrigin],
-              ['Expiry Date', scanResult.expiryDate],
-              ['Other Details', scanResult.otherDetails],
-            ].map(([label, value]) =>
-              value ? (
-                <View key={label} style={styles.resultRow}>
+            <View style={styles.resultHeader}>
+              <View style={styles.resultBadge}>
+                <Text style={styles.resultBadgeText}>AI Result</Text>
+              </View>
+              <Text style={styles.resultProductName}>{scanResult.productName}</Text>
+            </View>
+
+            {RESULT_FIELDS.map(([label, key]) =>
+              scanResult[key] ? (
+                <View key={key} style={styles.resultRow}>
                   <Text style={styles.resultLabel}>{label}</Text>
-                  <Text style={styles.resultValue}>{value}</Text>
+                  <Text style={styles.resultValue}>{scanResult[key]}</Text>
                 </View>
               ) : null
             )}
 
-            <TouchableOpacity
-              style={[styles.button, styles.saveButton, { marginTop: 16 }]}
-              onPress={() => setPriceModalVisible(true)}
-            >
-              <Text style={styles.buttonText}>Save to Store</Text>
+            <TouchableOpacity style={styles.saveToStoreBtn} onPress={() => setPriceModalVisible(true)}>
+              <Text style={styles.saveToStoreBtnText}>Set Price & Save to Store</Text>
             </TouchableOpacity>
           </View>
         )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Pricing Modal */}
@@ -213,18 +250,24 @@ export default function ScanScreen() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Set Pricing</Text>
-            <TouchableOpacity onPress={() => setPriceModalVisible(false)}>
+            <TouchableOpacity onPress={() => setPriceModalVisible(false)} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
           {scanResult && (
-            <Text style={styles.helperText}>{scanResult.productName}{scanResult.brand ? ` · ${scanResult.brand}` : ''}</Text>
+            <View style={styles.modalProductInfo}>
+              <Text style={styles.modalProductName}>{scanResult.productName}</Text>
+              {scanResult.brand ? <Text style={styles.modalProductMeta}>{scanResult.brand}</Text> : null}
+            </View>
           )}
-          <TextInput style={styles.input} placeholder="Selling Price *" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-          <TextInput style={styles.input} placeholder="Cost Price (optional)" value={costPrice} onChangeText={setCostPrice} keyboardType="decimal-pad" />
-          <TextInput style={styles.input} placeholder="MRP (optional)" value={mrp} onChangeText={setMrp} keyboardType="decimal-pad" />
-          <TouchableOpacity style={[styles.button, styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleSaveToStore} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Confirm & Save</Text>}
+          <Text style={styles.inputLabel}>Selling Price *</Text>
+          <TextInput style={styles.input} placeholder="e.g. 99" placeholderTextColor="#94A3B8" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+          <Text style={styles.inputLabel}>Cost Price</Text>
+          <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={costPrice} onChangeText={setCostPrice} keyboardType="decimal-pad" />
+          <Text style={styles.inputLabel}>MRP</Text>
+          <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={mrp} onChangeText={setMrp} keyboardType="decimal-pad" />
+          <TouchableOpacity style={[styles.primaryButton, saving && { opacity: 0.6 }]} onPress={handleSaveToStore} disabled={saving}>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Confirm & Save</Text>}
           </TouchableOpacity>
         </SafeAreaView>
       </Modal>
@@ -233,52 +276,112 @@ export default function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa' },
-  scroll: { padding: 16, paddingBottom: 40 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#f5f6fa' },
-  breadcrumb: { fontSize: 11, color: '#0984e3', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  title: { fontSize: 24, fontWeight: '800', color: '#2c3e50', marginBottom: 20 },
-  permissionText: { fontSize: 15, color: '#636e72', textAlign: 'center', marginBottom: 20 },
-  button: { backgroundColor: '#0984e3', paddingVertical: 14, borderRadius: 10, alignItems: 'center', marginBottom: 12 },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  secondaryButton: { backgroundColor: '#dfe6e9' },
-  analyzeButton: { backgroundColor: '#6c5ce7' },
-  saveButton: { backgroundColor: '#00b894' },
-  cameraContainer: { borderRadius: 12, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000' },
-  camera: { width: width - 32, height: (width - 32) * 1.2 },
-  cameraOverlay: {
-    position: 'absolute', top: 12, left: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4,
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+
+  headerLabel: { fontSize: 12, fontWeight: '700', color: '#4F46E5', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 20 },
+
+  permissionScreen: { flex: 1, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', padding: 40 },
+  permissionIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  permissionIconText: { fontSize: 36 },
+  permissionTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' },
+  permissionDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 28 },
+
+  openCameraBtn: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 28, alignItems: 'center', marginBottom: 12,
+    borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed',
   },
-  cameraText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  cameraControls: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 14, backgroundColor: '#000' },
-  captureButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  captureInner: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#ff4757' },
-  closeCameraBtn: { backgroundColor: '#2f3542', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  thumbnailRow: { flexDirection: 'row', marginBottom: 12 },
-  thumbWrapper: { position: 'relative', marginRight: 10 },
-  thumb: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#dfe6e9' },
+  openCameraIcon: { fontSize: 36, marginBottom: 8 },
+  openCameraText: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+  openCameraHint: { fontSize: 13, color: '#94A3B8' },
+
+  cameraCard: { borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#000' },
+  camera: { width: width - 40, height: (width - 40) * 1.15 },
+  cameraTopBar: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', justifyContent: 'flex-end' },
+  cameraCounter: { backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  cameraCounterText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  cameraFrame: { position: 'absolute', top: '15%', left: '10%', right: '10%', bottom: '15%' },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: '#fff', borderWidth: 3 },
+  cornerTL: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 4 },
+  cornerTR: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 4 },
+  cornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 4 },
+  cornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 4 },
+  cameraControls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 24, paddingVertical: 16, backgroundColor: '#0F172A' },
+  captureButton: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)' },
+  captureInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: '#EF4444' },
+  doneCameraBtn: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  doneCameraText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+
+  secondaryButton: {
+    backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  secondaryButtonText: { fontSize: 15, fontWeight: '600', color: '#475569' },
+
+  thumbnailSection: { marginBottom: 16 },
+  thumbnailLabel: { fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  thumbnailRow: { flexDirection: 'row', gap: 10 },
+  thumbWrapper: { position: 'relative' },
+  thumb: { width: 88, height: 88, borderRadius: 12, backgroundColor: '#E2E8F0' },
+  thumbEmpty: { width: 88, height: 88, borderRadius: 12, backgroundColor: '#F1F5F9', borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed' },
   removeThumb: {
     position: 'absolute', top: -6, right: -6,
-    backgroundColor: '#ff4757', width: 20, height: 20, borderRadius: 10,
+    backgroundColor: '#EF4444', width: 22, height: 22, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, elevation: 3,
   },
-  removeThumbText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  removeThumbText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+
+  analyzeButton: {
+    backgroundColor: '#6366F1', borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', marginBottom: 20,
+    shadowColor: '#6366F1', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5,
+  },
+  analyzeButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  analyzingRow: { flexDirection: 'row', alignItems: 'center' },
+
   resultCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginTop: 8,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    backgroundColor: '#fff', borderRadius: 16, marginBottom: 12,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 4, borderWidth: 1, borderColor: '#E0E7FF', overflow: 'hidden',
   },
-  resultTitle: { fontSize: 16, fontWeight: '800', color: '#2c3e50', marginBottom: 12 },
-  resultRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f1f2f6' },
-  resultLabel: { fontSize: 13, fontWeight: '600', color: '#576574', flex: 1 },
-  resultValue: { fontSize: 13, color: '#2f3542', flex: 1.5, textAlign: 'right' },
-  modal: { flex: 1, backgroundColor: '#f5f6fa', padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#2c3e50' },
-  cancelText: { fontSize: 16, color: '#0984e3' },
-  helperText: { fontSize: 13, color: '#7f8c8d', marginBottom: 16 },
+  resultHeader: { backgroundColor: '#EEF2FF', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E0E7FF' },
+  resultBadge: { alignSelf: 'flex-start', backgroundColor: '#4F46E5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 8 },
+  resultBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  resultProductName: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  resultRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingVertical: 11, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#F8FAFC',
+  },
+  resultLabel: { fontSize: 13, fontWeight: '600', color: '#64748B', flex: 1 },
+  resultValue: { fontSize: 13, color: '#0F172A', flex: 1.5, textAlign: 'right' },
+  saveToStoreBtn: {
+    margin: 16, backgroundColor: '#4F46E5', borderRadius: 12, paddingVertical: 15, alignItems: 'center',
+    shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+  },
+  saveToStoreBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+
+  primaryButton: {
+    backgroundColor: '#4F46E5', paddingVertical: 16, borderRadius: 14, alignItems: 'center',
+    shadowColor: '#4F46E5', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+  },
+  primaryButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+
+  modal: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  cancelBtn: { padding: 4 },
+  cancelText: { fontSize: 16, color: '#4F46E5', fontWeight: '600' },
+  modalProductInfo: {
+    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 20,
+    borderWidth: 1, borderColor: '#E2E8F0',
+  },
+  modalProductName: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  modalProductMeta: { fontSize: 13, color: '#64748B', marginTop: 3 },
+  inputLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
   input: {
-    backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#dfe6e9',
+    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13,
+    fontSize: 15, color: '#0F172A', marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0',
   },
 });

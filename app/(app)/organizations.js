@@ -4,23 +4,37 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, TextInput, Modal,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getStores, createStore } from '../../src/db/stores';
+import { useRouter } from 'expo-router';
+import { getOrganizations, createOrganization } from '../../src/db/organizations';
 
-export default function StoresScreen() {
+function OrgAvatar({ name }) {
+  const initials = name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('');
+  const colors = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+  const color = colors[name.charCodeAt(0) % colors.length];
+  return (
+    <View style={[styles.avatar, { backgroundColor: color + '18', borderColor: color + '30' }]}>
+      <Text style={[styles.avatarText, { color }]}>{initials}</Text>
+    </View>
+  );
+}
+
+export default function OrganizationsScreen() {
   const router = useRouter();
-  const { orgId, orgName } = useLocalSearchParams();
-  const [stores, setStores] = useState([]);
+  const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', address: '', phone: '', email: '', storeCode: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' });
 
-  const loadStores = useCallback(async (id) => {
+  const loadOrgs = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getStores(id);
-      setStores(data);
+      const data = await getOrganizations();
+      setOrgs(data);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -28,19 +42,19 @@ export default function StoresScreen() {
     }
   }, []);
 
-  useEffect(() => { if (orgId) loadStores(orgId); }, [orgId]);
+  useEffect(() => { loadOrgs(); }, []);
 
   const handleCreate = async () => {
     if (!form.name.trim()) {
-      Alert.alert('Error', 'Store name is required.');
+      Alert.alert('Error', 'Organization name is required.');
       return;
     }
     setSaving(true);
     try {
-      await createStore({ orgId, ...form });
+      await createOrganization(form);
       setModalVisible(false);
-      setForm({ name: '', address: '', phone: '', email: '', storeCode: '' });
-      await loadStores(orgId);
+      setForm({ name: '', phone: '', email: '', address: '' });
+      loadOrgs();
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -48,34 +62,36 @@ export default function StoresScreen() {
     }
   };
 
-  const renderStore = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push({ pathname: '/(app)/categories', params: { storeId: item.id, storeName: item.name } })}
-      activeOpacity={0.75}
-    >
-      <View style={styles.storeIcon}>
-        <Text style={styles.storeIconText}>🏪</Text>
-      </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        {item.address ? <Text style={styles.cardMeta}>{item.address}</Text> : null}
-        {item.store_code ? (
-          <View style={styles.codeBadge}>
-            <Text style={styles.codeBadgeText}>{item.store_code}</Text>
+  const renderOrg = ({ item }) => {
+    const contact = item.contactInfo || {};
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => router.push({ pathname: '/(app)/stores', params: { orgId: item.id, orgName: item.name } })}
+        activeOpacity={0.75}
+      >
+        <OrgAvatar name={item.name} />
+        <View style={styles.cardBody}>
+          <Text style={styles.cardTitle}>{item.name}</Text>
+          {contact.email ? <Text style={styles.cardMeta}>{contact.email}</Text> : null}
+          {contact.phone ? <Text style={styles.cardMeta}>{contact.phone}</Text> : null}
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {item.storeCount} {item.storeCount === 1 ? 'store' : 'stores'}
+            </Text>
           </View>
-        ) : null}
-      </View>
-      <Text style={styles.arrow}>›</Text>
-    </TouchableOpacity>
-  );
+        </View>
+        <Text style={styles.arrow}>›</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerLabel}>{orgName}</Text>
-          <Text style={styles.headerTitle}>Stores</Text>
+          <Text style={styles.headerLabel}>GoGenie</Text>
+          <Text style={styles.headerTitle}>Organizations</Text>
         </View>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
           <Text style={styles.addButtonText}>+ New</Text>
@@ -86,17 +102,17 @@ export default function StoresScreen() {
         <ActivityIndicator style={{ marginTop: 60 }} size="large" color="#4F46E5" />
       ) : (
         <FlatList
-          data={stores}
+          data={orgs}
           keyExtractor={(item) => String(item.id)}
-          renderItem={renderStore}
+          renderItem={renderOrg}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <View style={styles.emptyIcon}>
-                <Text style={styles.emptyIconText}>🏪</Text>
+                <Text style={styles.emptyIconText}>🏢</Text>
               </View>
-              <Text style={styles.emptyTitle}>No stores yet</Text>
-              <Text style={styles.emptyDesc}>Tap "+ New" to add the first store for {orgName}.</Text>
+              <Text style={styles.emptyTitle}>No organizations yet</Text>
+              <Text style={styles.emptyDesc}>Tap "+ New" to onboard your first organization.</Text>
             </View>
           }
         />
@@ -105,29 +121,26 @@ export default function StoresScreen() {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>New Store</Text>
+            <Text style={styles.modalTitle}>New Organization</Text>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.inputLabel}>Store Name *</Text>
-          <TextInput style={styles.input} placeholder="e.g. MG Road Branch" placeholderTextColor="#94A3B8" value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} />
-
-          <Text style={styles.inputLabel}>Address</Text>
-          <TextInput style={styles.input} placeholder="Street, City" placeholderTextColor="#94A3B8" value={form.address} onChangeText={(v) => setForm((f) => ({ ...f, address: v }))} />
+          <Text style={styles.inputLabel}>Organization Name *</Text>
+          <TextInput style={styles.input} placeholder="e.g. Fresh Mart Pvt Ltd" placeholderTextColor="#94A3B8" value={form.name} onChangeText={(v) => setForm((f) => ({ ...f, name: v }))} />
 
           <Text style={styles.inputLabel}>Phone</Text>
           <TextInput style={styles.input} placeholder="+91 98765 43210" placeholderTextColor="#94A3B8" value={form.phone} onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))} keyboardType="phone-pad" />
 
           <Text style={styles.inputLabel}>Email</Text>
-          <TextInput style={styles.input} placeholder="store@example.com" placeholderTextColor="#94A3B8" value={form.email} onChangeText={(v) => setForm((f) => ({ ...f, email: v }))} keyboardType="email-address" autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="contact@freshmart.com" placeholderTextColor="#94A3B8" value={form.email} onChangeText={(v) => setForm((f) => ({ ...f, email: v }))} keyboardType="email-address" autoCapitalize="none" />
 
-          <Text style={styles.inputLabel}>Store Code</Text>
-          <TextInput style={styles.input} placeholder="e.g. MGRD01" placeholderTextColor="#94A3B8" value={form.storeCode} onChangeText={(v) => setForm((f) => ({ ...f, storeCode: v }))} autoCapitalize="characters" />
+          <Text style={styles.inputLabel}>Address</Text>
+          <TextInput style={[styles.input, { height: 80 }]} placeholder="Street, City, State" placeholderTextColor="#94A3B8" value={form.address} onChangeText={(v) => setForm((f) => ({ ...f, address: v }))} multiline />
 
           <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleCreate} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Create Store</Text>}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Create Organization</Text>}
           </TouchableOpacity>
         </SafeAreaView>
       </Modal>
@@ -147,29 +160,42 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
 
   card: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12,
-    flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 2 },
-    elevation: 3, borderWidth: 1, borderColor: '#F1F5F9',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  storeIcon: {
-    width: 48, height: 48, borderRadius: 14, backgroundColor: '#F0FDF4',
-    alignItems: 'center', justifyContent: 'center', marginRight: 14,
-    borderWidth: 1, borderColor: '#BBF7D0',
+  avatar: {
+    width: 48, height: 48, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 14, borderWidth: 1,
   },
-  storeIconText: { fontSize: 22 },
+  avatarText: { fontSize: 18, fontWeight: '800' },
   cardBody: { flex: 1 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
   cardMeta: { fontSize: 13, color: '#64748B', marginTop: 2 },
-  codeBadge: {
-    alignSelf: 'flex-start', backgroundColor: '#F0FDF4', borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 3, marginTop: 6, borderWidth: 1, borderColor: '#BBF7D0',
+  badge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 6,
   },
-  codeBadgeText: { fontSize: 11, fontWeight: '700', color: '#059669' },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#4F46E5' },
   arrow: { fontSize: 22, color: '#CBD5E1', marginLeft: 8 },
 
   emptyState: { alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyIconText: { fontSize: 32 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
   emptyDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },

@@ -21,19 +21,59 @@ There are no tests in this project.
 
 ## Architecture
 
-This is a single-screen React Native (Expo) app. All UI lives in `App.js` (one large component). The only non-UI code is `src/api/kimiApi.js`.
+This is a React Native (Expo) staff onboarding app using **Expo Router** (file-based navigation). The entry point is `expo-router/entry` (set in `package.json`). `App.js` and `index.js` at the root are the old single-screen prototype and are no longer the active entry point.
 
-**Data flow:**
-1. User captures images via `expo-camera` (`CameraView`) or selects from gallery via `expo-image-picker` — stored as base64 strings in `images` state array (max 3).
-2. On "Analyze", `analyzeProductImages()` in `kimiApi.js` sends the base64 images to the Moonshot AI API as OpenAI-compatible vision messages.
-3. The API returns a JSON object with product fields; the result is rendered as key-value cards plus raw JSON.
+### Navigation structure (`app/`)
 
-**API layer (`src/api/kimiApi.js`):**
-- Default model: `kimi-k2.5` at `https://api.moonshot.ai/v1`
-- Fallback model: `moonshot-v1-128k-vision-preview` (used automatically if the primary returns `engine_overloaded`)
-- The system prompt instructs the model to return a strict JSON structure with 11 product fields
-- Response parsing strips markdown code fences before `JSON.parse`
+```
+app/
+  _layout.js              Root layout — auth guard, redirects based on login state
+  (auth)/
+    _layout.js            No header
+    login.js              Email + password login via Supabase RPC
+  (app)/
+    _layout.js            Header with "Sign Out" button
+    stores.js             List stores for org + "New Store" modal → navigates to categories
+    categories.js         Enable/disable categories for a store → navigates to products
+    products.js           List store products per category + add from master catalog or scan
+    scan.js               Camera + AI analysis (Kimi K2.5) → save new product to store
+```
 
-**API key:** The app has a hardcoded `DEFAULT_API_KEY` in `App.js:20` used when the user leaves the key field empty. The `.env.example` shows `KIMI_API_KEY` but the app does not actually read from `.env` — it uses the hardcoded value as a fallback.
+**Auth flow:** `app/_layout.js` subscribes to `auth.onAuthStateChange()`. Unauthenticated → redirected to `/(auth)/login`. Authenticated → redirected to `/(app)/stores`.
 
-**Important API note:** Standard Moonshot API keys (from `platform.moonshot.cn`) work. Kimi Code keys (from `kimi.com/code/console`) return 403 and are restricted to approved coding agents.
+### Data layer (`src/db/`)
+
+All DB calls go directly to Supabase (no calls to the retail-sass REST API):
+
+| File | Tables accessed | Key functions |
+|---|---|---|
+| `stores.js` | `stores` | `getStores(orgId)`, `createStore({...})`, `getStoreById(id)` |
+| `categories.js` | `product_categories`, `store_categories`, `tax_configuration` | `getAllCategories()`, `getStoreCategories(storeId)`, `enableCategoryForStore`, `disableCategoryForStore`, `createCategoryAndEnableForStore` |
+| `products.js` | `product_master`, `product_variant_combinations`, `store_products`, `brands` | `searchMasterProducts({query, categoryIds})`, `getStoreProducts(storeId)`, `addProductToStore`, `createProductFromScan`, `updateStoreProduct` |
+
+### Auth layer (`src/lib/supabase.js`)
+
+- Supabase client configured with `persistSession: false` (stateless)
+- Custom `auth` object wraps a Supabase RPC call (`login(p_email, p_password)`) and stores the user in memory
+- `auth.getUser()` returns the current in-memory user (includes `organization_id`)
+- `auth.onAuthStateChange(fn)` — subscribe to login/logout events
+
+### AI layer (`src/api/kimiApi.js`)
+
+- Calls Moonshot AI API at `https://api.moonshot.ai/v1`
+- Default model: `kimi-k2.5` with fallback to `moonshot-v1-128k-vision-preview` on engine overload
+- Accepts up to 3 base64 images, returns a structured JSON object with 11 product fields
+- `DEFAULT_API_KEY` is hardcoded in `scan.js` (not read from `.env`)
+
+### Key data relationships
+
+```
+stores (organization_id) → store_categories (store_id, category_id, is_active)
+                         → store_products   (store_id, product_combination_id, price, mrp, ...)
+
+product_categories ← store_categories
+product_master → product_variant_combinations ← store_products
+```
+
+`store_categories` is the mapping created when a staff member enables a category for a store.
+`store_products` is the mapping created when a product variant is added to a store with pricing.

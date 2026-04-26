@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, TextInput, Modal, SectionList,
+  ActivityIndicator, Alert, TextInput, Modal, Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -14,14 +14,14 @@ export default function CategoriesScreen() {
   const { storeId, storeName } = useLocalSearchParams();
   const router = useRouter();
 
-  const [storeCategories, setStoreCategories] = useState([]); // {id, category}[]
+  const [storeCategories, setStoreCategories] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [togglingId, setTogglingId] = useState(null);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDesc, setNewCategoryDesc] = useState('');
 
@@ -46,42 +46,26 @@ export default function CategoriesScreen() {
   const enabledIds = new Set(storeCategories.map((sc) => sc.category.id));
 
   const filteredAll = allCategories.filter(
-    (c) => !enabledIds.has(c.id) && c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    (c) => c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleEnable = async (categoryId) => {
-    setSaving(true);
+  const enabledCount = filteredAll.filter((c) => enabledIds.has(c.id)).length;
+
+  const handleToggle = async (categoryId, currentlyEnabled) => {
+    setTogglingId(categoryId);
     try {
-      await enableCategoryForStore(Number(storeId), categoryId);
-      await load();
-      setAddModalVisible(false);
-      setSearchQuery('');
+      if (currentlyEnabled) {
+        await disableCategoryForStore(Number(storeId), categoryId);
+      } else {
+        await enableCategoryForStore(Number(storeId), categoryId);
+      }
+      const storeCats = await getStoreCategories(Number(storeId));
+      setStoreCategories(storeCats);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
-      setSaving(false);
+      setTogglingId(null);
     }
-  };
-
-  const handleDisable = (categoryId, categoryName) => {
-    Alert.alert(
-      'Remove Category',
-      `Remove "${categoryName}" from this store? Products under this category will remain but won't be associated with the category here.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove', style: 'destructive',
-          onPress: async () => {
-            try {
-              await disableCategoryForStore(Number(storeId), categoryId);
-              await load();
-            } catch (e) {
-              Alert.alert('Error', e.message);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleCreateNew = async () => {
@@ -106,113 +90,111 @@ export default function CategoriesScreen() {
     }
   };
 
-  const renderEnabledCategory = ({ item }) => (
-    <TouchableOpacity
-      style={styles.categoryCard}
-      onPress={() => router.push({
-        pathname: '/(app)/products',
-        params: { storeId, storeName, categoryId: item.category.id, categoryName: item.category.name },
-      })}
-    >
-      <View style={styles.categoryInfo}>
-        <Text style={styles.categoryName}>{item.category.name}</Text>
-        {item.category.description ? <Text style={styles.categoryDesc}>{item.category.description}</Text> : null}
-      </View>
-      <View style={styles.categoryActions}>
-        <Text style={styles.arrow}>›</Text>
-        <TouchableOpacity onPress={() => handleDisable(item.category.id, item.category.name)} style={styles.removeBtn}>
-          <Text style={styles.removeBtnText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderCategory = ({ item }) => {
+    const isEnabled = enabledIds.has(item.id);
+    const isToggling = togglingId === item.id;
+
+    return (
+      <TouchableOpacity
+        style={[styles.card, isEnabled && styles.cardEnabled]}
+        onPress={() => {
+          if (isEnabled) {
+            router.push({
+              pathname: '/(app)/products',
+              params: { storeId, storeName, categoryId: item.id, categoryName: item.name },
+            });
+          }
+        }}
+        activeOpacity={isEnabled ? 0.7 : 1}
+      >
+        <View style={[styles.categoryDot, { backgroundColor: isEnabled ? '#4F46E5' : '#CBD5E1' }]} />
+        <View style={styles.cardBody}>
+          <Text style={[styles.cardTitle, !isEnabled && styles.cardTitleDisabled]}>{item.name}</Text>
+          {item.description ? <Text style={styles.cardMeta}>{item.description}</Text> : null}
+          {isEnabled && <Text style={styles.cardHint}>Tap to manage products ›</Text>}
+        </View>
+        <View style={styles.toggleBlock}>
+          {isToggling ? (
+            <ActivityIndicator size="small" color="#4F46E5" />
+          ) : (
+            <Switch
+              value={isEnabled}
+              onValueChange={() => handleToggle(item.id, isEnabled)}
+              disabled={togglingId !== null}
+              trackColor={{ false: '#E2E8F0', true: '#A5B4FC' }}
+              thumbColor={isEnabled ? '#4F46E5' : '#94A3B8'}
+              ios_backgroundColor="#E2E8F0"
+            />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.storeName}>{storeName}</Text>
-          <Text style={styles.title}>Categories</Text>
+          <Text style={styles.headerLabel}>{storeName}</Text>
+          <Text style={styles.headerTitle}>Categories</Text>
         </View>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
-            <Text style={styles.addButtonText}>+ Enable</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.addButton, { backgroundColor: '#00b894', marginLeft: 8 }]} onPress={() => setCreateModalVisible(true)}>
-            <Text style={styles.addButtonText}>+ Create</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.createButton} onPress={() => setCreateModalVisible(true)}>
+          <Text style={styles.createButtonText}>+ New</Text>
+        </TouchableOpacity>
       </View>
 
+      {!loading && (
+        <View style={styles.statsRow}>
+          <View style={styles.statChip}>
+            <Text style={styles.statChipText}>{enabledCount} enabled</Text>
+          </View>
+          <View style={[styles.statChip, { backgroundColor: '#F1F5F9' }]}>
+            <Text style={[styles.statChipText, { color: '#64748B' }]}>{filteredAll.length - enabledCount} disabled</Text>
+          </View>
+        </View>
+      )}
+
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search categories..."
+        placeholderTextColor="#94A3B8"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+      />
+
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#0984e3" />
+        <ActivityIndicator style={{ marginTop: 60 }} size="large" color="#4F46E5" />
       ) : (
         <FlatList
-          data={storeCategories}
+          data={filteredAll}
           keyExtractor={(item) => String(item.id)}
-          renderItem={renderEnabledCategory}
+          renderItem={renderCategory}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <Text style={styles.empty}>No categories enabled yet.{'\n'}Tap "+ Enable" to add from the global list or "+ Create" to make a new one.</Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No categories found</Text>
+              <Text style={styles.emptyDesc}>Try a different search or create a new category.</Text>
+            </View>
           }
         />
       )}
 
-      {/* Enable existing category modal */}
-      <Modal visible={addModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Enable Category</Text>
-            <TouchableOpacity onPress={() => { setAddModalVisible(false); setSearchQuery(''); }}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search categories..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <FlatList
-            data={filteredAll}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.globalCategoryRow} onPress={() => handleEnable(item.id)} disabled={saving}>
-                <View>
-                  <Text style={styles.categoryName}>{item.name}</Text>
-                  {item.description ? <Text style={styles.categoryDesc}>{item.description}</Text> : null}
-                </View>
-                <Text style={styles.enableText}>Enable</Text>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={<Text style={styles.empty}>No categories to add. All global categories are already enabled, or try a different search.</Text>}
-          />
-        </SafeAreaView>
-      </Modal>
-
-      {/* Create new category modal */}
       <Modal visible={createModalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>New Category</Text>
-            <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+            <TouchableOpacity onPress={() => setCreateModalVisible(false)} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.helperText}>This will be saved to the global master list and enabled for this store.</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Category Name *"
-            value={newCategoryName}
-            onChangeText={setNewCategoryName}
-          />
-          <TextInput
-            style={[styles.input, { height: 80 }]}
-            placeholder="Description (optional)"
-            value={newCategoryDesc}
-            onChangeText={setNewCategoryDesc}
-            multiline
-          />
+          <Text style={styles.helperText}>Saved to the global master list and auto-enabled for this store.</Text>
+
+          <Text style={styles.inputLabel}>Category Name *</Text>
+          <TextInput style={styles.input} placeholder="e.g. Dairy & Eggs" placeholderTextColor="#94A3B8" value={newCategoryName} onChangeText={setNewCategoryName} />
+
+          <Text style={styles.inputLabel}>Description</Text>
+          <TextInput style={[styles.input, { height: 80 }]} placeholder="Optional description" placeholderTextColor="#94A3B8" value={newCategoryDesc} onChangeText={setNewCategoryDesc} multiline />
+
           <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleCreateNew} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Create & Enable</Text>}
           </TouchableOpacity>
@@ -223,45 +205,59 @@ export default function CategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f6fa' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', padding: 16, paddingBottom: 8 },
-  storeName: { fontSize: 12, color: '#0984e3', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontSize: 24, fontWeight: '800', color: '#2c3e50' },
-  headerButtons: { flexDirection: 'row' },
-  addButton: { backgroundColor: '#0984e3', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  addButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  list: { padding: 16 },
-  categoryCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10,
-    flexDirection: 'row', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-  },
-  categoryInfo: { flex: 1 },
-  categoryName: { fontSize: 16, fontWeight: '600', color: '#2c3e50' },
-  categoryDesc: { fontSize: 13, color: '#7f8c8d', marginTop: 2 },
-  categoryActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  arrow: { fontSize: 22, color: '#b2bec3' },
-  removeBtn: { padding: 4 },
-  removeBtnText: { fontSize: 14, color: '#ff4757', fontWeight: '700' },
-  empty: { textAlign: 'center', color: '#7f8c8d', marginTop: 40, fontSize: 14, lineHeight: 22, paddingHorizontal: 20 },
-  modal: { flex: 1, backgroundColor: '#f5f6fa', padding: 20 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#2c3e50' },
-  cancelText: { fontSize: 16, color: '#0984e3' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  headerLabel: { fontSize: 12, fontWeight: '700', color: '#4F46E5', textTransform: 'uppercase', letterSpacing: 0.8 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+  createButton: { backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10 },
+  createButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  statsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 10 },
+  statChip: { backgroundColor: '#EEF2FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  statChipText: { fontSize: 12, fontWeight: '700', color: '#4F46E5' },
+
   searchInput: {
-    backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12,
-    fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#dfe6e9',
+    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
+    fontSize: 15, color: '#0F172A', marginHorizontal: 20, marginBottom: 10,
+    borderWidth: 1, borderColor: '#E2E8F0',
   },
-  globalCategoryRow: {
-    backgroundColor: '#fff', borderRadius: 10, padding: 16, marginBottom: 8,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 24 },
+
+  card: {
+    backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16,
+    marginBottom: 10, flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 2, borderWidth: 1, borderColor: '#F1F5F9',
   },
-  enableText: { color: '#0984e3', fontWeight: '700', fontSize: 14 },
-  helperText: { fontSize: 13, color: '#7f8c8d', marginBottom: 16, lineHeight: 18 },
+  cardEnabled: { borderColor: '#C7D2FE' },
+  categoryDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
+  cardBody: { flex: 1, marginRight: 8 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
+  cardTitleDisabled: { color: '#94A3B8' },
+  cardMeta: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  cardHint: { fontSize: 11, color: '#6366F1', fontWeight: '600', marginTop: 5 },
+  toggleBlock: { justifyContent: 'center', minWidth: 52 },
+
+  emptyState: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 6 },
+  emptyDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },
+
+  modal: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 8 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
+  cancelBtn: { padding: 4 },
+  cancelText: { fontSize: 16, color: '#4F46E5', fontWeight: '600' },
+  helperText: { fontSize: 13, color: '#64748B', marginBottom: 24, lineHeight: 18 },
+  inputLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
   input: {
-    backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#dfe6e9',
+    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13,
+    fontSize: 15, color: '#0F172A', marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0',
   },
-  saveButton: { backgroundColor: '#00b894', paddingVertical: 15, borderRadius: 10, alignItems: 'center', marginTop: 8 },
+  saveButton: {
+    backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 4,
+    shadowColor: '#10B981', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
+  },
   saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });
