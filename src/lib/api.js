@@ -42,7 +42,7 @@ async function request(path, { method = 'GET', body, token } = {}) {
 export const auth = {
   signInWithPassword: async ({ email, password }) => {
     try {
-      const data = await request('/api/staff/auth', {
+      const data = await request('/staff/auth', {
         method: 'POST',
         body: { email, password },
       });
