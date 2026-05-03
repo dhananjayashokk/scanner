@@ -19,6 +19,7 @@ export default function CategoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [togglingId, setTogglingId] = useState(null);
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -45,9 +46,11 @@ export default function CategoriesScreen() {
 
   const enabledIds = new Set(storeCategories.map((sc) => sc.category.id));
 
-  const filteredAll = allCategories.filter(
-    (c) => c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredAll = allCategories.filter((c) => {
+    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = showActiveOnly ? enabledIds.has(c.id) : true;
+    return matchesSearch && matchesFilter;
+  });
 
   const enabledCount = filteredAll.filter((c) => enabledIds.has(c.id)).length;
 
@@ -151,6 +154,14 @@ export default function CategoriesScreen() {
           <View style={[styles.statChip, { backgroundColor: '#F1F5F9' }]}>
             <Text style={[styles.statChipText, { color: '#64748B' }]}>{filteredAll.length - enabledCount} disabled</Text>
           </View>
+          <TouchableOpacity
+            style={[styles.statChip, showActiveOnly && styles.filterChipActive]}
+            onPress={() => setShowActiveOnly((v) => !v)}
+          >
+            <Text style={[styles.statChipText, showActiveOnly && { color: '#fff' }]}>
+              {showActiveOnly ? '✓ Active only' : 'Active only'}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -216,6 +227,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 10 },
   statChip: { backgroundColor: '#EEF2FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   statChipText: { fontSize: 12, fontWeight: '700', color: '#4F46E5' },
+  filterChipActive: { backgroundColor: '#4F46E5' },
 
   searchInput: {
     backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
