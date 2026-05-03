@@ -5,7 +5,7 @@ import {
   ActivityIndicator, Alert, TextInput, Modal, Switch,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { getStoreProducts, searchMasterProducts, addProductToStore, updateStoreProduct } from '../../src/db/products';
+import { getStoreProducts, createProductFromScan, updateStoreProduct } from '../../src/db/products';
 
 export default function ProductsScreen() {
   const { storeId, storeName, categoryId, categoryName } = useLocalSearchParams();
@@ -14,18 +14,19 @@ export default function ProductsScreen() {
   const [storeProducts, setStoreProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [masterProducts, setMasterProducts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [priceModal, setPriceModal] = useState({ visible: false, combination: null });
-  const [price, setPrice] = useState('');
-  const [costPrice, setCostPrice] = useState('');
-  const [mrp, setMrp] = useState('');
+  const [newModalVisible, setNewModalVisible] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newBrand, setNewBrand] = useState('');
+  const [newBarcode, setNewBarcode] = useState('');
+  const [newWeight, setNewWeight] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+  const [newMrp, setNewMrp] = useState('');
+  const [newCostPrice, setNewCostPrice] = useState('');
+  const [newSaving, setNewSaving] = useState(false);
 
   const [togglingId, setTogglingId] = useState(null);
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [detailModal, setDetailModal] = useState({ visible: false, product: null });
   const [editPrice, setEditPrice] = useState('');
   const [editCostPrice, setEditCostPrice] = useState('');
@@ -49,62 +50,47 @@ export default function ProductsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSearch = useCallback(async (q) => {
-    setSearchQuery(q);
-    setSearching(true);
-    try {
-      const results = await searchMasterProducts({ query: q, categoryIds: [Number(categoryId)] });
-      const addedCombinationIds = new Set(storeProducts.map((sp) => sp.product_combination_id));
-      setMasterProducts(results.flatMap((p) =>
-        (p.variants || []).filter((v) => !addedCombinationIds.has(v.id)).map((v) => ({
-          ...v,
-          productName: p.name,
-          categoryName: p.category?.name,
-          brandName: p.brand?.name,
-        }))
-      ));
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setSearching(false);
-    }
-  }, [categoryId, storeProducts]);
-
-  useEffect(() => { if (addModalVisible) handleSearch(''); }, [addModalVisible]);
-
-  const openPriceModal = (combination) => {
-    setPriceModal({ visible: true, combination });
-    setPrice('');
-    setCostPrice('');
-    setMrp('');
+  const resetNewForm = () => {
+    setNewName(''); setNewBrand(''); setNewBarcode('');
+    setNewWeight(''); setNewDescription('');
+    setNewPrice(''); setNewMrp(''); setNewCostPrice('');
   };
 
-  const handleAddToStore = async () => {
-    if (!price.trim() || isNaN(Number(price))) {
+  const handleCreateNew = async () => {
+    if (!newName.trim()) {
+      Alert.alert('Error', 'Product name is required.');
+      return;
+    }
+    if (!newPrice.trim() || isNaN(Number(newPrice))) {
       Alert.alert('Error', 'Please enter a valid selling price.');
       return;
     }
-    setSaving(true);
+    setNewSaving(true);
     try {
-      await addProductToStore(Number(storeId), priceModal.combination.id, {
-        price: Number(price),
-        costPrice: costPrice ? Number(costPrice) : null,
-        mrp: mrp ? Number(mrp) : null,
+      await createProductFromScan(Number(storeId), Number(categoryId), {
+        productName: newName.trim(),
+        price: Number(newPrice),
+        mrp: newMrp ? Number(newMrp) : null,
+        costPrice: newCostPrice ? Number(newCostPrice) : null,
+        brand: newBrand.trim() || null,
+        barcode: newBarcode.trim() || null,
+        weightOrVolume: newWeight.trim() || null,
+        description: newDescription.trim() || null,
       });
-      setPriceModal({ visible: false, combination: null });
-      setAddModalVisible(false);
+      setNewModalVisible(false);
+      resetNewForm();
       await load();
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
-      setSaving(false);
+      setNewSaving(false);
     }
   };
 
   const handleToggleAvailable = async (item) => {
     setTogglingId(item.id);
     try {
-      await updateStoreProduct(item.id, { isAvailable: !item.is_available });
+      await updateStoreProduct(Number(storeId), item.id, { isAvailable: !item.is_available });
       await load();
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -127,7 +113,7 @@ export default function ProductsScreen() {
     }
     setEditSaving(true);
     try {
-      await updateStoreProduct(detailModal.product.id, {
+      await updateStoreProduct(Number(storeId), detailModal.product.id, {
         price: Number(editPrice),
         costPrice: editCostPrice ? Number(editCostPrice) : null,
         mrp: editMrp ? Number(editMrp) : null,
@@ -181,8 +167,16 @@ export default function ProductsScreen() {
           <Text style={styles.headerTitle}>Products</Text>
         </View>
         <View style={styles.headerButtons}>
-          <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
-            <Text style={styles.addButtonText}>+ Add</Text>
+          <TouchableOpacity
+            style={[styles.filterButton, showActiveOnly && styles.filterButtonActive]}
+            onPress={() => setShowActiveOnly((v) => !v)}
+          >
+            <Text style={[styles.filterButtonText, showActiveOnly && { color: '#fff' }]}>
+              {showActiveOnly ? '✓ Active' : 'Active'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.newButton} onPress={() => setNewModalVisible(true)}>
+            <Text style={styles.addButtonText}>+ New</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.addButton, styles.scanButton]}
@@ -197,7 +191,7 @@ export default function ProductsScreen() {
         <ActivityIndicator style={{ marginTop: 60 }} size="large" color="#4F46E5" />
       ) : (
         <FlatList
-          data={storeProducts}
+          data={showActiveOnly ? storeProducts.filter((p) => p.is_available) : storeProducts}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderStoreProduct}
           contentContainerStyle={styles.list}
@@ -207,7 +201,7 @@ export default function ProductsScreen() {
                 <Text style={styles.emptyIconText}>📦</Text>
               </View>
               <Text style={styles.emptyTitle}>No products yet</Text>
-              <Text style={styles.emptyDesc}>Tap "+ Add" to pick from catalog or "Scan" to scan a new product.</Text>
+              <Text style={styles.emptyDesc}>Tap "+ New" to add manually or "Scan" to scan a new product.</Text>
             </View>
           }
         />
@@ -254,74 +248,53 @@ export default function ProductsScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Add from master catalog modal */}
-      <Modal visible={addModalVisible} animationType="slide" presentationStyle="pageSheet">
+      {/* New product form modal */}
+      <Modal visible={newModalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Product</Text>
-            <TouchableOpacity onPress={() => setAddModalVisible(false)} style={styles.cancelBtn}>
+            <Text style={styles.modalTitle}>New Product</Text>
+            <TouchableOpacity onPress={() => { setNewModalVisible(false); resetNewForm(); }} style={styles.cancelBtn}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name or SKU..."
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={handleSearch}
-          />
-          {searching ? (
-            <ActivityIndicator style={{ marginTop: 20 }} color="#4F46E5" />
-          ) : (
-            <FlatList
-              data={masterProducts}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.masterRow} onPress={() => openPriceModal(item)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.productName}</Text>
-                    <Text style={styles.cardMeta}>SKU: {item.global_sku}{item.brandName ? ` · ${item.brandName}` : ''}</Text>
-                    {item.barcode ? <Text style={styles.cardMeta}>Barcode: {item.barcode}</Text> : null}
-                  </View>
-                  <View style={styles.setPriceBadge}>
-                    <Text style={styles.setPriceText}>Set Price</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>No products found</Text>
-                  <Text style={styles.emptyDesc}>Use "Scan" to add a new product to the catalog.</Text>
-                </View>
-              }
-            />
-          )}
-        </SafeAreaView>
-      </Modal>
+          <Text style={styles.helperText}>Added to the master catalog and enabled for this store and category.</Text>
 
-      {/* Price entry modal */}
-      <Modal visible={priceModal.visible} animationType="slide" presentationStyle="formSheet">
-        <SafeAreaView style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Set Pricing</Text>
-            <TouchableOpacity onPress={() => setPriceModal({ visible: false, combination: null })} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-          {priceModal.combination && (
-            <View style={styles.detailInfoCard}>
-              <Text style={styles.detailName}>{priceModal.combination.productName}</Text>
-              <Text style={styles.detailMeta}>SKU: {priceModal.combination.global_sku}</Text>
-            </View>
-          )}
+          <Text style={styles.inputLabel}>Product Name *</Text>
+          <TextInput style={styles.input} placeholder="e.g. Aashirvaad Atta 5kg" placeholderTextColor="#94A3B8" value={newName} onChangeText={setNewName} />
+
           <Text style={styles.inputLabel}>Selling Price *</Text>
-          <TextInput style={styles.input} placeholder="e.g. 99" placeholderTextColor="#94A3B8" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-          <Text style={styles.inputLabel}>Cost Price</Text>
-          <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={costPrice} onChangeText={setCostPrice} keyboardType="decimal-pad" />
-          <Text style={styles.inputLabel}>MRP</Text>
-          <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={mrp} onChangeText={setMrp} keyboardType="decimal-pad" />
-          <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleAddToStore} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Add to Store</Text>}
+          <TextInput style={styles.input} placeholder="e.g. 299" placeholderTextColor="#94A3B8" value={newPrice} onChangeText={setNewPrice} keyboardType="decimal-pad" />
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.inputLabel}>MRP</Text>
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={newMrp} onChangeText={setNewMrp} keyboardType="decimal-pad" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Cost Price</Text>
+              <TextInput style={styles.input} placeholder="Optional" placeholderTextColor="#94A3B8" value={newCostPrice} onChangeText={setNewCostPrice} keyboardType="decimal-pad" />
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.inputLabel}>Brand</Text>
+              <TextInput style={styles.input} placeholder="e.g. Amul" placeholderTextColor="#94A3B8" value={newBrand} onChangeText={setNewBrand} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Weight / Volume</Text>
+              <TextInput style={styles.input} placeholder="e.g. 500g" placeholderTextColor="#94A3B8" value={newWeight} onChangeText={setNewWeight} />
+            </View>
+          </View>
+
+          <Text style={styles.inputLabel}>Barcode</Text>
+          <TextInput style={styles.input} placeholder="Optional — auto-generated if blank" placeholderTextColor="#94A3B8" value={newBarcode} onChangeText={setNewBarcode} keyboardType="number-pad" />
+
+          <Text style={styles.inputLabel}>Description</Text>
+          <TextInput style={[styles.input, { height: 72 }]} placeholder="Optional" placeholderTextColor="#94A3B8" value={newDescription} onChangeText={setNewDescription} multiline />
+
+          <TouchableOpacity style={[styles.saveButton, newSaving && { opacity: 0.6 }]} onPress={handleCreateNew} disabled={newSaving}>
+            {newSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Create Product</Text>}
           </TouchableOpacity>
         </SafeAreaView>
       </Modal>
@@ -336,6 +309,10 @@ const styles = StyleSheet.create({
   headerLabel: { fontSize: 12, fontWeight: '700', color: '#4F46E5', textTransform: 'uppercase', letterSpacing: 0.6 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
   headerButtons: { flexDirection: 'row', gap: 8 },
+  filterButton: { backgroundColor: '#EEF2FF', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: '#C7D2FE' },
+  filterButtonActive: { backgroundColor: '#4F46E5', borderColor: '#4F46E5' },
+  filterButtonText: { color: '#4F46E5', fontWeight: '700', fontSize: 13 },
+  newButton: { backgroundColor: '#4F46E5', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   addButton: { backgroundColor: '#4F46E5', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   scanButton: { backgroundColor: '#10B981' },
   addButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
@@ -364,7 +341,9 @@ const styles = StyleSheet.create({
   emptyDesc: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 20 },
 
   modal: { flex: 1, backgroundColor: '#F8FAFC', paddingHorizontal: 20, paddingTop: 8 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  helperText: { fontSize: 13, color: '#64748B', marginBottom: 20, lineHeight: 18 },
+  row: { flexDirection: 'row' },
   modalTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
   cancelBtn: { padding: 4 },
   cancelText: { fontSize: 16, color: '#4F46E5', fontWeight: '600' },
@@ -388,14 +367,4 @@ const styles = StyleSheet.create({
   },
   saveButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
-  searchInput: {
-    backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
-    fontSize: 15, color: '#0F172A', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0',
-  },
-  masterRow: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8,
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9',
-  },
-  setPriceBadge: { backgroundColor: '#EEF2FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  setPriceText: { color: '#4F46E5', fontWeight: '700', fontSize: 13 },
 });

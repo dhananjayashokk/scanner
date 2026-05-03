@@ -71,9 +71,9 @@ export async function createProductFromScan(storeId, scanResult, { price, costPr
   return data.data;
 }
 
-export async function updateStoreProduct(storeProductId, { price, costPrice, mrp, isAvailable }) {
-  const data = await apiRequest(`/api/store/products/${storeProductId}`, {
-    method: 'PATCH',
+export async function updateStoreProduct(storeId, storeProductId, { price, costPrice, mrp, isAvailable }) {
+  const data = await apiRequest(`/api/store/${storeId}/products/${storeProductId}`, {
+    method: 'PUT',
     body: { price, costPrice, mrp, isAvailable },
   });
   return data.data;
