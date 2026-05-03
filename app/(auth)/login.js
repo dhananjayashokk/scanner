@@ -7,7 +7,7 @@ import {
 import { auth } from '../../src/lib/api';
 
 const DEMO_ACCOUNTS = [
-  { label: 'GoGenie Staff', email: 'staff@gogenie.com', password: 'staff123' },
+  { label: 'GoGenie Staff', email: 'staff@store1.com', password: 'staff123' },
 ];
 
 export default function LoginScreen() {
