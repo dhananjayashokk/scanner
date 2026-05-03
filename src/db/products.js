@@ -4,7 +4,7 @@ export async function searchMasterProducts({ query = '', categoryIds = [] }) {
   const params = new URLSearchParams({ limit: '100' });
   if (query) params.set('search', query);
   // category filter by name not supported server-side; filter client-side by categoryId
-  const data = await apiRequest(`/api/product-master/available?storeId=0&${params}`);
+  const data = await apiRequest(`/product-master/available?storeId=0&${params}`);
   let products = data.data || [];
   if (categoryIds.length > 0) {
     // product-master/available returns categoryName; do client-side filter using categoryId
@@ -22,7 +22,7 @@ export async function searchMasterProducts({ query = '', categoryIds = [] }) {
 }
 
 export async function getStoreProducts(storeId) {
-  const data = await apiRequest(`/api/store/${storeId}/products?limit=200`);
+  const data = await apiRequest(`/store/${storeId}/products?limit=200`);
   return (data.data || []).map((p) => ({
     id: p.id,
     price: p.price,
@@ -45,7 +45,7 @@ export async function getStoreProducts(storeId) {
 }
 
 export async function addProductToStore(storeId, combinationId, { price, costPrice, mrp }) {
-  const data = await apiRequest(`/api/store/${storeId}/products`, {
+  const data = await apiRequest(`/store/${storeId}/products`, {
     method: 'POST',
     body: { products: [{ productCombinationId: combinationId, price, costPrice, mrp }] },
   });
@@ -53,7 +53,7 @@ export async function addProductToStore(storeId, combinationId, { price, costPri
 }
 
 export async function createProductFromScan(storeId, scanResult, { price, costPrice, mrp, categoryId }) {
-  const data = await apiRequest(`/api/store/${storeId}/products/scan`, {
+  const data = await apiRequest(`/store/${storeId}/products/scan`, {
     method: 'POST',
     body: {
       productName: scanResult.productName,
@@ -72,7 +72,7 @@ export async function createProductFromScan(storeId, scanResult, { price, costPr
 }
 
 export async function updateStoreProduct(storeId, storeProductId, { price, costPrice, mrp, isAvailable }) {
-  const data = await apiRequest(`/api/store/${storeId}/products/${storeProductId}`, {
+  const data = await apiRequest(`/store/${storeId}/products/${storeProductId}`, {
     method: 'PUT',
     body: { price, costPrice, mrp, isAvailable },
   });

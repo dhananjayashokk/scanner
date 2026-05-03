@@ -1,12 +1,12 @@
 import { apiRequest } from '../lib/api';
 
 export async function getAllCategories() {
-  const data = await apiRequest('/api/categories?limit=200');
+  const data = await apiRequest('/categories?limit=200');
   return data.data || [];
 }
 
 export async function getStoreCategories(storeId) {
-  const data = await apiRequest(`/api/store/${storeId}/categories`);
+  const data = await apiRequest(`/store/${storeId}/categories`);
   return (data.data || []).map((row) => ({
     id: row.id,
     is_active: row.isActive,
@@ -20,7 +20,7 @@ export async function getStoreCategories(storeId) {
 }
 
 export async function enableCategoryForStore(storeId, categoryId) {
-  const data = await apiRequest(`/api/store/${storeId}/categories`, {
+  const data = await apiRequest(`/store/${storeId}/categories`, {
     method: 'POST',
     body: { categoryId },
   });
@@ -28,11 +28,11 @@ export async function enableCategoryForStore(storeId, categoryId) {
 }
 
 export async function disableCategoryForStore(storeId, categoryId) {
-  await apiRequest(`/api/store/${storeId}/categories/${categoryId}`, { method: 'DELETE' });
+  await apiRequest(`/store/${storeId}/categories/${categoryId}`, { method: 'DELETE' });
 }
 
 export async function createCategoryAndEnableForStore(storeId, { name, description }) {
-  const createData = await apiRequest('/api/categories', {
+  const createData = await apiRequest('/categories', {
     method: 'POST',
     body: { name, description },
   });
