@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { auth } from '../src/lib/api';
+import { useOtaUpdate } from '../src/lib/useOtaUpdate';
 
 export default function RootLayout() {
+  useOtaUpdate();
   const [user, setUser] = useState(undefined); // undefined = auth not yet determined
   const router = useRouter();
   const pathname = usePathname();

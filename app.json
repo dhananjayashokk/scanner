@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "ProductScanner",
-    "slug": "ProductScanner",
+    "name": "GoGenie Staff",
+    "slug": "gogenie-staff-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,9 +27,14 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.ProductScanner"
+      "package": "com.gogenie.staff"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -49,7 +54,21 @@
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to select product images."
         }
-      ]
-    ]
+      ],
+      "expo-web-browser"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c2e7a4ba-35d3-4dc5-8277-0debfea4b265"
+      }
+    },
+    "owner": "dhananjay1212",
+    "updates": {
+      "url": "https://u.expo.dev/c2e7a4ba-35d3-4dc5-8277-0debfea4b265"
+    }
   }
 }

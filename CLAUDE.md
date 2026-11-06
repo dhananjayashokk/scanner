@@ -43,7 +43,7 @@ app/
 
 ### Data layer (`src/db/`)
 
-All DB calls go directly to Supabase (no calls to the retail-sass REST API):
+All DB calls go directly to Supabase (no calls to the gogenie-retailer-portal REST API):
 
 | File | Tables accessed | Key functions |
 |---|---|---|
@@ -77,3 +77,22 @@ product_master → product_variant_combinations ← store_products
 
 `store_categories` is the mapping created when a staff member enables a category for a store.
 `store_products` is the mapping created when a product variant is added to a store with pricing.
+
+## Releasing (EAS Build + EAS Update)
+Builds and over-the-air updates are configured in `eas.json` (profiles `preview` = installable APK on channel `preview`, `production` = Play Store bundle on channel `production`) and `app.json` (`runtimeVersion: { policy: "appVersion" }`).
+
+One-time setup (needs an Expo account):
+```bash
+npm i -g eas-cli && eas login
+eas init                    # links this app to an Expo project (adds extra.eas.projectId)
+eas update:configure        # adds updates.url
+eas build -p android --profile preview   # the one APK people install by hand
+```
+
+Every release after that (JS / UI / logic changes):
+```bash
+eas update --channel preview --message "what changed"
+```
+Installed apps check on launch and when reopened (`useOtaUpdate`), download the update and offer "Restart".
+
+Native changes (new native library, permissions, icon/splash, Expo SDK upgrade): bump `version` in `app.json` (this changes the runtime version), then `eas build` again and reinstall. Updates published for the old version will not reach the new build and vice versa.
