@@ -2,7 +2,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { auth } from '../../src/lib/api';
 
@@ -65,9 +65,11 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.inner}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <ScrollView
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         {/* Brand */}
         <View style={styles.brandSection}>
@@ -172,6 +174,7 @@ export default function LoginScreen() {
             ))}
           </View>
         )}
+      </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -179,7 +182,8 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  flex: { flex: 1 },
+  inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 24 },
 
   brandSection: { alignItems: 'center', marginBottom: 40 },
   logoBox: {
