@@ -17,6 +17,14 @@ export default function CategoriesScreen() {
   const [storeCategories, setStoreCategories] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh: reload without swapping the list for the full-screen spinner
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [togglingId, setTogglingId] = useState(null);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
@@ -26,8 +34,8 @@ export default function CategoriesScreen() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryDesc, setNewCategoryDesc] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [storeCats, allCats] = await Promise.all([
         getStoreCategories(Number(storeId)),
@@ -178,6 +186,8 @@ export default function CategoriesScreen() {
       ) : (
         <FlatList
           data={filteredAll}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderCategory}
           contentContainerStyle={styles.list}

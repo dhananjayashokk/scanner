@@ -26,12 +26,20 @@ export default function OrganizationsScreen() {
   const router = useRouter();
   const [orgs, setOrgs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh: reload without swapping the list for the full-screen spinner
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadOrgs(true);
+    setRefreshing(false);
+  };
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' });
 
-  const loadOrgs = useCallback(async () => {
-    setLoading(true);
+  const loadOrgs = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getOrganizations();
       setOrgs(data);
@@ -103,6 +111,8 @@ export default function OrganizationsScreen() {
       ) : (
         <FlatList
           data={orgs}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderOrg}
           contentContainerStyle={styles.list}

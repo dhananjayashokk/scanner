@@ -12,12 +12,20 @@ export default function StoresScreen() {
   const { orgId, orgName } = useLocalSearchParams();
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh: reload without swapping the list for the full-screen spinner
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStores(orgId, true);
+    setRefreshing(false);
+  };
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: '', address: '', phone: '', email: '', storeCode: '' });
 
-  const loadStores = useCallback(async (id) => {
-    setLoading(true);
+  const loadStores = useCallback(async (id, silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getStores(id);
       setStores(data);
@@ -87,6 +95,8 @@ export default function StoresScreen() {
       ) : (
         <FlatList
           data={stores}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderStore}
           contentContainerStyle={styles.list}

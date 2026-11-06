@@ -13,6 +13,14 @@ export default function ProductsScreen() {
 
   const [storeProducts, setStoreProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh: reload without swapping the list for the full-screen spinner
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load(true);
+    setRefreshing(false);
+  };
 
   const [newModalVisible, setNewModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
@@ -33,8 +41,8 @@ export default function ProductsScreen() {
   const [editMrp, setEditMrp] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getStoreProducts(Number(storeId));
       const filtered = data.filter(
@@ -192,6 +200,8 @@ export default function ProductsScreen() {
       ) : (
         <FlatList
           data={showActiveOnly ? storeProducts.filter((p) => p.is_available) : storeProducts}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderStoreProduct}
           contentContainerStyle={styles.list}
