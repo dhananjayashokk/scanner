@@ -86,6 +86,9 @@ export const auth = {
         method: 'POST',
         body: { phone, otp },
       });
+      if (data.user?.role === 'gogenie_delivery') {
+        throw new Error('Delivery agents should use the GoGenie Delivery app');
+      }
       _currentUser = { ...data.user, token: data.token };
       notifyListeners();
       return { user: _currentUser, error: null };
